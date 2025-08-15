@@ -13,7 +13,7 @@ from llm_functions import (
     llm_relevance_checker, 
     llm_answer_generator
 )
-from retrieving_utils import find_model_database, search_similar_models, extract_chunks_from_vector_db
+from retrieving_utils import find_model_database, search_similar_models, hybrid_search
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -112,7 +112,7 @@ async def message_handler(message: Message):
                 return
             
             # Этап 4: Извлечение релевантных чанков
-            chunks = extract_chunks_from_vector_db(vector_db_path, topic)
+            chunks = hybrid_search(vector_db_path, topic)
             
             if not chunks:
                 await message.answer("❌ Информацию по вашему запросу найти не удалось.")

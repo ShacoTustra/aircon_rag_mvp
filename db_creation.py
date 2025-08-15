@@ -14,7 +14,7 @@ import pickle
 load_dotenv()
 
 VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "db")
-EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "all-MiniLM-L6-v2")
+EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "sberbank-ai/sbert_large_mt_nlu_ru")
 LLM_URL = os.getenv("LLM_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -231,11 +231,13 @@ def create_chunks(text: str, chunk_size: int = 500, overlap: int = 150) -> List[
     
     return final_chunks
 
-def create_faiss_index(chunks: List[str], model_names: List[str]):
+def create_faiss_index(text: str, model_names: List[str]):
     """Создает и сохраняет FAISS индекс"""
+    
     if not chunks:
         return
-    
+    # Создаем чанки
+    chunks = create_chunks(text)
     # Создаем эмбеддинги
     embeddings = embedding_model.encode(chunks)
     
@@ -252,7 +254,11 @@ def create_faiss_index(chunks: List[str], model_names: List[str]):
         safe_model_name = re.sub(r'[^\w\-_\.]', '_', model_name)
         index_path = os.path.join(VECTOR_DB_DIR, f"{safe_model_name}.faiss")
         metadata_path = os.path.join(VECTOR_DB_DIR, f"{safe_model_name}_metadata.pkl")
+        text_path = os.path.join(VECTOR_DB_DIR, f"{safe_model_name}.txt")
         
+        with open(text_path,'w') as f:
+            f.write(text)
+
         faiss.write_index(index, index_path)
         
         with open(metadata_path, 'wb') as f:
@@ -284,10 +290,9 @@ async def process_pdf_file(pdf_path: str):
         print(f"Не удалось извлечь текст из {pdf_path}")
         return
     
-    # Создаем чанки
-    chunks = create_chunks(text)
     
-    create_faiss_index(chunks, models)
+
+    create_faiss_index(text, models)
 
 async def main():
     """Основная функция"""

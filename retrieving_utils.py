@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 # Пути к векторным базам
 VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR","db")
-EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL","all-MiniLM-L6-v2")
+EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL","sberbank-ai/sbert_large_mt_nlu_ru")
 
 # Инициализация модели для эмбеддингов
 embedding_model = SentenceTransformer(EMBEDDINGS_MODEL)
@@ -92,6 +92,49 @@ def load_faiss_index_and_chunks(db_path: str) -> tuple:
     except Exception as e:
         print(f"Ошибка при загрузке индекса {db_path}: {e}")
         return None, None
+
+def hybrid_search(db_path: str, query: str, top_k: int = 5) -> List[str]:
+    semantic_chunks = extract_chunks_from_vector_db(db_path, query, top_k)
+    keyword_chunks = extract_chunks_from_text_file(db_path, query, top_k)
+    return semantic_chunks + keyword_chunks
+
+def extract_chunks_from_text_file(db_path: str, query: str, top_k: int = 5) -> List[str]:
+    text_file = txt_path = db_path.replace('.faiss', '.txt')
+    if not os.path.exists(text_file):
+        return []
+    
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Разбиваем текст на параграфы/чанки
+    chunks = content.split('\n\n')  # Разделение по двойным переносам строк
+    chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
+    
+    # Извлекаем ключевые слова из запроса (простая токенизация)
+    query_words = set(query.lower().split())
+    
+    # Подсчитываем релевантность каждого чанка
+    chunk_scores = []
+    for i, chunk in enumerate(chunks):
+        chunk_lower = chunk.lower()
+        score = 0
+        
+        # Подсчитываем количество совпадений ключевых слов
+        for word in query_words:
+            if len(word) > 2:  # Игнорируем слишком короткие слова
+                score += chunk_lower.count(word)
+        
+        if score > 0:
+            chunk_scores.append((score, i, chunk))
+    
+    # Сортируем по релевантности и возвращаем топ-к
+    chunk_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    result = []
+    for score, idx, chunk in chunk_scores[:top_k]:
+        result.append(chunk)
+    
+    return result
 
 def extract_chunks_from_vector_db(db_path: str, query: str, top_k: int = 5) -> List[str]:
     """
